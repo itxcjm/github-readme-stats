@@ -194,15 +194,15 @@ const flexLayout = ({ items, gap, direction, sizes = [] }) => {
 /**
  * Returns theme based colors with proper overrides and defaults.
  *
- * @param {Object[]} args Function arguments.
+ * @param {Object} args Function arguments.
  * @param {string} args.title_color Card title color.
  * @param {string} args.text_color Card text color.
  * @param {string} args.icon_color Card icon color.
  * @param {string} args.bg_color Card background color.
  * @param {string} args.border_color Card border color.
+ * @param {string} args.ring_color Card ring color.
  * @param {string} args.theme Card theme.
  * @param {string} args.fallbackTheme Fallback theme.
- *
  */
 const getCardColors = ({
   title_color,
@@ -300,11 +300,16 @@ const CONSTANTS = {
   ONE_DAY: 86400,
 };
 
+const OWNER_AFFILIATIONS = ["OWNER", "COLLABORATOR", "ORGANIZATION_MEMBER"];
+
 const SECONDARY_ERROR_MESSAGES = {
   MAX_RETRY:
     "Please add an env variable called PAT_1 with your github token in vercel",
   USER_NOT_FOUND: "Make sure the provided username is not an organization",
   GRAPHQL_ERROR: "Please try again later",
+  INVALID_AFFILIATION: `Invalid owner affiliations. Valid values are: ${OWNER_AFFILIATIONS.join(
+    ", ",
+  )}`,
 };
 
 /**
@@ -324,6 +329,7 @@ class CustomError extends Error {
   static MAX_RETRY = "MAX_RETRY";
   static USER_NOT_FOUND = "USER_NOT_FOUND";
   static GRAPHQL_ERROR = "GRAPHQL_ERROR";
+  static INVALID_AFFILIATION = "INVALID_AFFILIATION";
 }
 
 /**
@@ -392,7 +398,7 @@ const lowercaseTrim = (name) => name.toLowerCase().trim();
 /**
  * Split array of languages in two columns.
  *
- * @template T Langauge object.
+ * @template T Language object.
  * @param {Array<T>} arr Array of languages.
  * @param {number} perChunk Number of languages per column.
  * @returns {Array<T>} Array of languages split in two columns.
@@ -422,6 +428,36 @@ const parseEmojis = (str) => {
   return str.replace(/:\w+:/gm, (emoji) => {
     return toEmoji.get(emoji) || "";
   });
+};
+/**
+ * Parse owner affiliations.
+ *
+ * @param {string[]} affiliations
+ * @returns {string[]} Parsed affiliations.
+ *
+ * @throws {CustomError} If affiliations contains invalid values.
+ */
+const parseOwnerAffiliations = (affiliations) => {
+  // Set default value for ownerAffiliations.
+  // NOTE: Done here since parseArray() will always return an empty array even nothing
+  //was specified.
+  affiliations =
+    affiliations && affiliations.length > 0
+      ? affiliations.map((affiliation) => affiliation.toUpperCase())
+      : ["OWNER"];
+
+  // Check if ownerAffiliations contains valid values.
+  if (
+    affiliations.some(
+      (affiliation) => !OWNER_AFFILIATIONS.includes(affiliation),
+    )
+  ) {
+    throw new CustomError(
+      "Invalid query parameter",
+      CustomError.INVALID_AFFILIATION,
+    );
+  }
+  return affiliations;
 };
 
 /**
@@ -454,11 +490,13 @@ export {
   wrapTextMultiline,
   logger,
   CONSTANTS,
+  OWNER_AFFILIATIONS,
   CustomError,
   MissingParamError,
   measureText,
   lowercaseTrim,
   chunkArray,
   parseEmojis,
+  parseOwnerAffiliations,
   dateDiff,
 };

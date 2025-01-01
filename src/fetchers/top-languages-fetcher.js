@@ -6,12 +6,13 @@ import {
   MissingParamError,
   request,
   wrapTextMultiline,
+  parseOwnerAffiliations,
 } from "../common/utils.js";
 
 /**
  * Top languages fetcher object.
  *
- * @param {import('Axios').AxiosRequestHeaders} variables Fetcher variables.
+ * @param {import('axios').AxiosRequestHeaders} variables Fetcher variables.
  * @param {string} token GitHub token.
  * @returns {Promise<import('../common/types').StatsFetcherResponse>} Languages fetcher response.
  */
@@ -19,10 +20,10 @@ const fetcher = (variables, token) => {
   return request(
     {
       query: `
-      query userInfo($login: String!) {
+      query userInfo($login: String!, $ownerAffiliations: [RepositoryAffiliation]) {
         user(login: $login) {
-          # fetch only owner repos & not forks
-          repositories(ownerAffiliations: OWNER, isFork: false, first: 100) {
+          # do not fetch forks
+          repositories(ownerAffiliations: $ownerAffiliations, isFork: false, first: 100) {
             nodes {
               name
               languages(first: 10, orderBy: {field: SIZE, direction: DESC}) {
@@ -51,13 +52,21 @@ const fetcher = (variables, token) => {
  * Fetch top languages for a given username.
  *
  * @param {string} username GitHub username.
- * @param {string[]} exclude_repo List of repositories to exclude.
+ * @param {string[]} exclude_repo List of repositories to exclude. Default: [].
+ * @param {string[]} ownerAffiliations The owner affiliations to filter by. Default: OWNER.
  * @returns {Promise<import("./types").TopLangData>} Top languages data.
  */
-const fetchTopLanguages = async (username, exclude_repo = []) => {
+const fetchTopLanguages = async (
+  username,
+  exclude_repo = [],
+  size_weight = 1,
+  count_weight = 0,
+  ownerAffiliations = [],
+) => {
   if (!username) throw new MissingParamError(["username"]);
+  ownerAffiliations = parseOwnerAffiliations(ownerAffiliations);
 
-  const res = await retryer(fetcher, { login: username });
+  const res = await retryer(fetcher, { login: username, ownerAffiliations });
 
   if (res.data.errors) {
     logger.error(res.data.errors);
@@ -101,6 +110,8 @@ const fetchTopLanguages = async (username, exclude_repo = []) => {
     .sort((a, b) => b.size - a.size)
     .filter((name) => !repoToHide[name.name]);
 
+  let repoCount = 0;
+
   repoNodes = repoNodes
     .filter((node) => node.languages.edges.length > 0)
     // flatten the list of language nodes
@@ -111,9 +122,14 @@ const fetchTopLanguages = async (username, exclude_repo = []) => {
 
       // if we already have the language in the accumulator
       // & the current language name is same as previous name
-      // add the size to the language size.
+      // add the size to the language size and increase repoCount.
       if (acc[prev.node.name] && prev.node.name === acc[prev.node.name].name) {
         langSize = prev.size + acc[prev.node.name].size;
+        repoCount += 1;
+      } else {
+        // reset repoCount to 1
+        // language must exist in at least one repo to be detected
+        repoCount = 1;
       }
       return {
         ...acc,
@@ -121,9 +137,17 @@ const fetchTopLanguages = async (username, exclude_repo = []) => {
           name: prev.node.name,
           color: prev.node.color,
           size: langSize,
+          count: repoCount,
         },
       };
     }, {});
+
+  Object.keys(repoNodes).forEach((name) => {
+    // comparison index calculation
+    repoNodes[name].size =
+      Math.pow(repoNodes[name].size, size_weight) *
+      Math.pow(repoNodes[name].count, count_weight);
+  });
 
   const topLangs = Object.keys(repoNodes)
     .sort((a, b) => repoNodes[b].size - repoNodes[a].size)

@@ -35,7 +35,10 @@ export default async (req, res) => {
     locale,
     disable_animations,
     border_radius,
+    number_format,
     border_color,
+    role,
+    rank_icon,
   } = req.query;
   res.setHeader("Content-Type", "image/svg+xml");
 
@@ -53,6 +56,7 @@ export default async (req, res) => {
       parseBoolean(count_private),
       parseBoolean(include_all_commits),
       parseArray(exclude_repo),
+      parseArray(role),
     );
 
     const cacheSeconds = clampValue(
@@ -88,8 +92,10 @@ export default async (req, res) => {
         custom_title,
         border_radius,
         border_color,
+        number_format,
         locale: locale ? locale.toLowerCase() : null,
         disable_animations: parseBoolean(disable_animations),
+        rank_icon,
       }),
     );
   } catch (err) {

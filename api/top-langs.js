@@ -25,11 +25,15 @@ export default async (req, res) => {
     layout,
     langs_count,
     exclude_repo,
+    size_weight,
+    count_weight,
     custom_title,
     locale,
     border_radius,
     border_color,
+    role,
     disable_animations,
+    hide_progress,
   } = req.query;
   res.setHeader("Content-Type", "image/svg+xml");
 
@@ -45,6 +49,9 @@ export default async (req, res) => {
     const topLangs = await fetchTopLanguages(
       username,
       parseArray(exclude_repo),
+      size_weight,
+      count_weight,
+      parseArray(role),
     );
 
     const cacheSeconds = clampValue(
@@ -77,6 +84,7 @@ export default async (req, res) => {
         border_color,
         locale: locale ? locale.toLowerCase() : null,
         disable_animations: parseBoolean(disable_animations),
+        hide_progress: parseBoolean(hide_progress),
       }),
     );
   } catch (err) {
